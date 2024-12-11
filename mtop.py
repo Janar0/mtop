@@ -3,20 +3,56 @@ import argparse
 import psutil
 import subprocess
 import time
-import shutil
 import sys
 from blessed import Terminal
+import shutil
 
 def get_gpu_usage():
-    try:
-        output = subprocess.check_output(
-            ["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
-            stderr=subprocess.DEVNULL
-        ).decode('utf-8').strip()
-        gpu_util = int(output)
-        return gpu_util
-    except:
-        return None
+    """
+    Возвращает загрузку GPU в процентах.
+    Логика:
+    1. Пробуем nvidia-smi
+    2. Если не удалось, пробуем rocm-smi (для AMD)
+    3. Иначе возвращаем None
+    """
+    # Сначала nvidia-smi
+    if shutil.which("nvidia-smi"):
+        try:
+            output = subprocess.check_output(
+                ["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
+                stderr=subprocess.DEVNULL
+            ).decode('utf-8').strip()
+            gpu_util = int(output)
+            return gpu_util
+        except:
+            pass
+
+    # Пробуем rocm-smi
+    if shutil.which("rocm-smi"):
+        try:
+            output = subprocess.check_output(
+                ["rocm-smi", "--showuse"],
+                stderr=subprocess.DEVNULL
+            ).decode('utf-8', errors='ignore')
+            # Ищем строку вида "GPU[0]: GPU use: XX%"
+            for line in output.splitlines():
+                line = line.strip()
+                if "GPU use:" in line:
+                    # Пример: "GPU[0]: GPU use: 45%"
+                    parts = line.split(":")
+                    # parts[2] может содержать " 45%"
+                    if len(parts) >= 3 and "GPU use" in parts[1]:
+                        # берем последний кусок
+                        usage_part = parts[-1].strip()
+                        # должно быть что-то вида "45%"
+                        if usage_part.endswith('%'):
+                            val_str = usage_part[:-1].strip()
+                            return int(val_str)
+        except:
+            pass
+
+    # Если ничего не сработало
+    return None
 
 def draw_bar(value, width=30, char='█'):
     filled = int(value * width / 100)
@@ -24,12 +60,8 @@ def draw_bar(value, width=30, char='█'):
     return bar_str
 
 def print_stats(cpu, mem, gpu, graph_mode=False, term_width=80):
-    """
-    Печатает статистику. Если graph_mode=True, то рисует бары.
-    Иначе просто цифры.
-    """
     if graph_mode:
-        bar_width = max(10, term_width - 20)  # расширим длину баров
+        bar_width = max(10, term_width - 20)
 
         print("CPU Usage:")
         bar_cpu = draw_bar(cpu, width=bar_width)
@@ -46,7 +78,6 @@ def print_stats(cpu, mem, gpu, graph_mode=False, term_width=80):
         else:
             print("N/A")
     else:
-        # Текстовый режим без баров
         print(f"CPU: {cpu}%")
         print(f"MEM: {mem}%")
         if gpu is not None:
@@ -57,7 +88,7 @@ def print_stats(cpu, mem, gpu, graph_mode=False, term_width=80):
 def main():
     parser = argparse.ArgumentParser(
         description="mtop - упрощенный монитор ресурсов (CPU, MEM, GPU)",
-        epilog="Примеры:\n  mtop\n  mtop -g\n  mtop -r\n  mtop -r -g\n\nДля помощи: 'mtop --help'"
+        epilog="Примеры:\n  mtop             # Один вывод без графики\n  mtop -g          # Один вывод с графикой\n  mtop -r          # Непрерывный режим без графики\n  mtop -r -g       # Непрерывный режим с графикой\n\nДля помощи: 'mtop --help'"
     )
     parser.add_argument('-g', '--graph', action='store_true', help='Отображать данные в виде графиков')
     parser.add_argument('-r', '--run', action='store_true', help='Запустить в непрерывном режиме')
@@ -69,11 +100,6 @@ def main():
         sys.exit(1)
 
     term = Terminal()
-    # Поведение в зависимости от аргументов:
-    # - Без аргументов: один вывод и выход
-    # - -g без -r: один вывод в графическом режиме
-    # - -r без -g: непрерывный режим без графики
-    # - -r -g: непрерывный режим с графикой
 
     graph_mode = args.graph
     continuous = args.run
@@ -84,12 +110,10 @@ def main():
         mem = psutil.virtual_memory().percent
         gpu = get_gpu_usage()
 
-        # Простой вывод без очистки экрана, т.к. один раз
         if graph_mode:
             print_stats(cpu, mem, gpu, graph_mode=True, term_width=term.width)
         else:
             print_stats(cpu, mem, gpu, graph_mode=False, term_width=term.width)
-        # Выходим
         sys.exit(0)
     else:
         # Непрерывный режим
