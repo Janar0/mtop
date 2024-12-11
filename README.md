@@ -13,6 +13,6 @@
 ## Установка
 
    ```bash
-   git clone https://example.com/your-repo/mtop.git
+   git clone https://github.com/Janar0/mtop.git
    cd mtop
   ./install.sh
