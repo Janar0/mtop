@@ -15,4 +15,4 @@
    ```bash
    git clone https://github.com/Janar0/mtop.git
    cd mtop
-  ./install.sh
+   sudo bash ./install.sh
