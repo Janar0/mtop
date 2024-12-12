@@ -8,14 +8,6 @@ from blessed import Terminal
 import shutil
 
 def get_gpu_usage():
-    """
-    Возвращает загрузку GPU в процентах.
-    Логика:
-    1. Пробуем nvidia-smi
-    2. Если не удалось, пробуем rocm-smi (для AMD)
-    3. Иначе возвращаем None
-    """
-    # Сначала nvidia-smi
     if shutil.which("nvidia-smi"):
         try:
             output = subprocess.check_output(
@@ -27,31 +19,25 @@ def get_gpu_usage():
         except:
             pass
 
-    # Пробуем rocm-smi
     if shutil.which("rocm-smi"):
         try:
             output = subprocess.check_output(
                 ["rocm-smi", "--showuse"],
                 stderr=subprocess.DEVNULL
             ).decode('utf-8', errors='ignore')
-            # Ищем строку вида "GPU[0]: GPU use: XX%"
             for line in output.splitlines():
                 line = line.strip()
                 if "GPU use:" in line:
-                    # Пример: "GPU[0]: GPU use: 45%"
+                    # Пример строки: "GPU[0]: GPU use: 45%"
                     parts = line.split(":")
-                    # parts[2] может содержать " 45%"
                     if len(parts) >= 3 and "GPU use" in parts[1]:
-                        # берем последний кусок
                         usage_part = parts[-1].strip()
-                        # должно быть что-то вида "45%"
                         if usage_part.endswith('%'):
                             val_str = usage_part[:-1].strip()
                             return int(val_str)
         except:
             pass
 
-    # Если ничего не сработало
     return None
 
 def draw_bar(value, width=30, char='█'):
@@ -93,7 +79,7 @@ def main():
     parser.add_argument('-g', '--graph', action='store_true', help='Отображать данные в виде графиков')
     parser.add_argument('-r', '--run', action='store_true', help='Запустить в непрерывном режиме')
     parser.add_argument('-i', '--interval', type=float, default=1.0, help='Интервал обновления в секундах')
-
+    
     try:
         args = parser.parse_args()
     except SystemExit:
@@ -105,8 +91,8 @@ def main():
     continuous = args.run
 
     if not continuous:
-        # Однократный вывод
-        cpu = psutil.cpu_percent(interval=0)
+        # Один раз: добавим задержку при измерении CPU
+        cpu = psutil.cpu_percent(interval=0.1)
         mem = psutil.virtual_memory().percent
         gpu = get_gpu_usage()
 
@@ -119,7 +105,11 @@ def main():
         # Непрерывный режим
         try:
             with term.fullscreen(), term.cbreak(), term.hidden_cursor():
+                # Первый замер CPU с задержкой для корректных показаний
+                cpu = psutil.cpu_percent(interval=0.1)
                 while True:
+                    # Последующие замеры без задержки, так как есть постоянный поток данных
+                    # Но можно оставить небольшую задержку, если хотите всегда более сглаженные данные:
                     cpu = psutil.cpu_percent(interval=None)
                     mem = psutil.virtual_memory().percent
                     gpu = get_gpu_usage()
