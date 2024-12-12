@@ -92,7 +92,7 @@ def main():
 
     if not continuous:
         # Один раз: добавим задержку при измерении CPU
-        cpu = psutil.cpu_percent(interval=0.1)
+        cpu = psutil.cpu_percent(interval=0.5)
         mem = psutil.virtual_memory().percent
         gpu = get_gpu_usage()
 
@@ -106,7 +106,7 @@ def main():
         try:
             with term.fullscreen(), term.cbreak(), term.hidden_cursor():
                 # Первый замер CPU с задержкой для корректных показаний
-                cpu = psutil.cpu_percent(interval=0.1)
+                cpu = psutil.cpu_percent(interval=0.5)
                 while True:
                     # Последующие замеры без задержки, так как есть постоянный поток данных
                     # Но можно оставить небольшую задержку, если хотите всегда более сглаженные данные:
